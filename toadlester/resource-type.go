@@ -3,43 +3,58 @@ package toadlester
 import (
 	"context"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
 
-// resourceType is the collection of Env Vars used to configure
+// resourceType is a collection of Env Var types
+// These are used to configure each ToadLester looping series
 // Currently the only read type is a direct Algo: /series/TYPE/ALGO
 // Using the list below, an example:
-// name = EXP_SIZE
-// value = 500
-// algo = up
+// Type: name = EXP_SIZE
+// Setting: value = 500
+// Algorithm: algo = up
 /*
-	EXP_SIZE=5
-	EXP_LIMIT=250
-	EXP_TAIL=1
-	EXP_MOD=250
-	FLOAT_SIZE=4
-	FLOAT_LIMIT=100
-	FLOAT_TAIL=5
-	FLOAT_MOD=1.123
-	INT_SIZE=10
-	INT_LIMIT=100
-	INT_TAIL=1
-	INT_MOD=1
-	RAND_SIZE=1
-	RAND_LIMIT=500
-	RAND_TAIL=3
-	RAND_MOD=500
+	EXP_SIZE=5 EXP_LIMIT=250 EXP_TAIL=1 EXP_MOD=250
+	FLOAT_SIZE=4 FLOAT_LIMIT=100 FLOAT_TAIL=5 FLOAT_MOD=1.123
+	INT_SIZE=10 INT_LIMIT=100 INT_TAIL=1 INT_MOD=1
+	RAND_SIZE=1 RAND_LIMIT=500 RAND_TAIL=3 RAND_MOD=500
 */
+
+func dataSourceType() *schema.Resource {
+	return &schema.Resource{
+		ReadContext: dataSourceTypeRead, // Read is at /series/type/[up,down]
+		Schema: map[string]*schema.Schema{
+			"name": {
+				Type:         schema.TypeString,
+				Required:     true,
+				ValidateFunc: validation.StringLenBetween(1, 20),
+				Description:  "The type setting to change",
+			},
+			"endpoint": {
+				Type:        schema.TypeString,
+				Computed:    true,
+				Description: "Toadlester API Endpoint",
+			},
+			"algo": {
+				Type:         schema.TypeString,
+				Required:     true,
+				ValidateFunc: validation.StringLenBetween(2, 4),
+				Description:  "Algorithm used to read the type",
+			},
+		},
+	}
+}
+
 func resourceType() *schema.Resource {
 	return &schema.Resource{
 		CreateContext: resourceTypeCreate, // Create is at /reset/TYPE_VAR/VALUE
 		ReadContext:   resourceTypeRead,   // Read is at /series/type/[up,down]
 		UpdateContext: resourceTypeUpdate, // Update is like Create (updates to a new sequence)
 		DeleteContext: resourceTypeDelete, // Delete is like Create (deletes the current sequence)
-
 		Schema: map[string]*schema.Schema{
 			"name": {
 				Type:         schema.TypeString,
@@ -64,8 +79,6 @@ func resourceType() *schema.Resource {
 }
 
 func resourceTypeCreate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	var diag diag.Diagnostics
-
 	// Provider config
 	config := m.(*Config)
 
@@ -83,21 +96,34 @@ func resourceTypeCreate(ctx context.Context, d *schema.ResourceData, m interface
 	// Create a new Type sequence
 	done, err := config.Client.CreateType(set)
 	if err != nil {
-		return diag
+		return diag.FromErr(err)
 	}
-	if !strings.Contains(done, envvar) && !strings.Contains(done, algo) && !strings.Contains(done, setval) {
-		return diag
+
+	// Confirmation should contain all three settings
+	if !strings.Contains(done, envvar) || !strings.Contains(done, algo) || !strings.Contains(done, setval) {
+		return diag.Errorf("API response missing expected values: got '%q' expecting '%q', '%q', '%q'", done, envvar, algo, setval)
+	}
+
+	// Set schema fields
+	if err = d.Set("name", envvar); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("value", setval); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("algo", algo); err != nil {
+		return diag.FromErr(err)
 	}
 
 	// Set the ID
-	d.SetId(envvar)
+	now := time.Now().Format("20060102T150405")
+	tag := envvar + "_" + setval + "_" + now
+	d.SetId(tag)
 
-	return diag
+	return nil
 }
 
 func resourceTypeRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
-	var diag diag.Diagnostics
-
 	// Provider config
 	config := m.(*Config)
 
@@ -112,15 +138,32 @@ func resourceTypeRead(ctx context.Context, d *schema.ResourceData, m interface{}
 		Algo:  algo,
 	}
 
+	// Run and validate response
 	done, err := config.Client.ReadType(set)
 	if err != nil {
-		return diag
+		return diag.FromErr(err)
 	}
 	if !strings.Contains(done, algo) {
-		return diag
+		return diag.Errorf("API response missing expected values: got '%q' expecting '%q'", done, algo)
 	}
 
-	return diag
+	// Set schema fields
+	if err = d.Set("name", envvar); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("value", setval); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("algo", algo); err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Set the ID
+	now := time.Now().Format("20060102T150405")
+	tag := envvar + "_" + setval + "_" + now
+	d.SetId(tag)
+
+	return nil
 }
 
 func resourceTypeUpdate(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
@@ -129,4 +172,45 @@ func resourceTypeUpdate(ctx context.Context, d *schema.ResourceData, m interface
 
 func resourceTypeDelete(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
 	return resourceTypeCreate(ctx, d, m)
+}
+
+func dataSourceTypeRead(ctx context.Context, d *schema.ResourceData, m interface{}) diag.Diagnostics {
+	// Provider config
+	config := m.(*Config)
+
+	// Resource data
+	envvar := d.Get("name").(string)
+	algo := d.Get("algo").(string)
+
+	set := &Setting{
+		Name: envvar,
+		Algo: algo,
+	}
+
+	// Run and validate response
+	done, err := config.Client.ReadType(set)
+	if err != nil {
+		return diag.FromErr(err)
+	}
+	if !strings.Contains(done, algo) {
+		return diag.Errorf("API response missing expected values: got '%q' expecting '%q'", done, algo)
+	}
+
+	// Set schema fields
+	if err = d.Set("name", envvar); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("algo", algo); err != nil {
+		return diag.FromErr(err)
+	}
+	if err = d.Set("endpoint", config.Client.BaseURL); err != nil {
+		return diag.FromErr(err)
+	}
+
+	// Set the ID
+	now := time.Now().Format("20060102T150405")
+	tag := envvar + "_" + algo + "_" + now
+	d.SetId(tag)
+
+	return nil
 }

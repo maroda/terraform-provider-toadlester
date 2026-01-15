@@ -21,7 +21,7 @@ func Provider() *schema.Provider {
 			"toadlester": resourceType(),
 		},
 		DataSourcesMap: map[string]*schema.Resource{
-			"toadlester": resourceType(),
+			"toadlester_type": dataSourceType(),
 		},
 		ConfigureContextFunc: configureProvider,
 	}

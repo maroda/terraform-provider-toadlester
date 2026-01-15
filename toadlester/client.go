@@ -43,7 +43,7 @@ func NewAPIClient(url string) *APIClient {
 // This API does not need initializing, so "Create" here means
 // that a new looping buffer of numbers is being created.
 func (c *APIClient) CreateType(setting *Setting) (string, error) {
-	url := c.BaseURL + "/" + setting.Name + "/" + setting.Value
+	url := c.BaseURL + "/reset/" + setting.Name + "/" + setting.Value
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return "", err
