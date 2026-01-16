@@ -3,7 +3,6 @@ package toadlester
 import (
 	"io"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -64,9 +63,7 @@ func (c *APIClient) CreateType(setting *Setting) (string, error) {
 }
 
 func (c *APIClient) ReadType(setting *Setting) (string, error) {
-	parts := strings.Split(setting.Name, "_")
-	baretype := strings.ToLower(parts[0])
-	url := c.BaseURL + "/series/" + baretype + "/" + setting.Algo
+	url := c.BaseURL + "/current/json"
 
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {

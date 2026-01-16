@@ -84,16 +84,12 @@ Set new down value INT_SIZE for 100
 
 func TestAPIClient_ReadTypeLC(t *testing.T) {
 	t.Run("Local Container: Reads API endpoint", func(t *testing.T) {
-		want := "Metric_int_up"
+		want := "INT_SIZE"
 		stop, url := makeLocalToadLester(t)
 		defer stop()
 
 		client := tl.NewAPIClient(url)
-		set := &tl.Setting{
-			Name:  "INT_SIZE",
-			Value: "100",
-			Algo:  "up",
-		}
+		set := &tl.Setting{}
 		got, err := client.ReadType(set)
 		assertError(t, err, nil)
 		assertStringContains(t, got, want)

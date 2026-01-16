@@ -2,6 +2,7 @@ package toadlester
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"time"
 
@@ -26,24 +27,18 @@ import (
 
 func dataSourceType() *schema.Resource {
 	return &schema.Resource{
-		ReadContext: dataSourceTypeRead, // Read is at /series/type/[up,down]
+		ReadContext: dataSourceTypeRead, // Read is at /current/json
 		Schema: map[string]*schema.Schema{
-			"name": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringLenBetween(1, 20),
-				Description:  "The type setting to change",
+			"config": {
+				Type:        schema.TypeMap,
+				Computed:    true,
+				Elem:        &schema.Schema{Type: schema.TypeString},
+				Description: "The returned configuration",
 			},
 			"endpoint": {
 				Type:        schema.TypeString,
 				Computed:    true,
 				Description: "Toadlester API Endpoint",
-			},
-			"algo": {
-				Type:         schema.TypeString,
-				Required:     true,
-				ValidateFunc: validation.StringLenBetween(2, 4),
-				Description:  "Algorithm used to read the type",
 			},
 		},
 	}
@@ -117,7 +112,7 @@ func resourceTypeCreate(ctx context.Context, d *schema.ResourceData, m interface
 
 	// Set the ID
 	now := time.Now().Format("20060102T150405")
-	tag := envvar + "_" + setval + "_" + now
+	tag := envvar + "_" + now
 	d.SetId(tag)
 
 	return nil
@@ -143,15 +138,25 @@ func resourceTypeRead(ctx context.Context, d *schema.ResourceData, m interface{}
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if !strings.Contains(done, algo) {
-		return diag.Errorf("API response missing expected values: got '%q' expecting '%q'", done, algo)
+
+	// Unmarshal full json config response
+	var currConfig map[string]string
+	if err = json.Unmarshal([]byte(done), &currConfig); err != nil {
+		return diag.FromErr(err)
 	}
 
-	// Set schema fields
+	// Drift Detection
+	// Get actual value from the API response
+	actualVal, ok := currConfig[envvar]
+	if !ok {
+		return diag.Errorf("configuration missing expected key: '%s'", envvar)
+	}
+
+	// Set schema fields with actual values
 	if err = d.Set("name", envvar); err != nil {
 		return diag.FromErr(err)
 	}
-	if err = d.Set("value", setval); err != nil {
+	if err = d.Set("value", actualVal); err != nil {
 		return diag.FromErr(err)
 	}
 	if err = d.Set("algo", algo); err != nil {
@@ -160,7 +165,7 @@ func resourceTypeRead(ctx context.Context, d *schema.ResourceData, m interface{}
 
 	// Set the ID
 	now := time.Now().Format("20060102T150405")
-	tag := envvar + "_" + setval + "_" + now
+	tag := envvar + "_" + now
 	d.SetId(tag)
 
 	return nil
@@ -178,29 +183,23 @@ func dataSourceTypeRead(ctx context.Context, d *schema.ResourceData, m interface
 	// Provider config
 	config := m.(*Config)
 
-	// Resource data
-	envvar := d.Get("name").(string)
-	algo := d.Get("algo").(string)
-
-	set := &Setting{
-		Name: envvar,
-		Algo: algo,
-	}
+	// Data resource has no settings (for future use)
+	set := &Setting{}
 
 	// Run and validate response
 	done, err := config.Client.ReadType(set)
 	if err != nil {
 		return diag.FromErr(err)
 	}
-	if !strings.Contains(done, algo) {
-		return diag.Errorf("API response missing expected values: got '%q' expecting '%q'", done, algo)
+
+	// Unmarshal full json config response
+	var currConfig map[string]string
+	if err = json.Unmarshal([]byte(done), &currConfig); err != nil {
+		return diag.FromErr(err)
 	}
 
 	// Set schema fields
-	if err = d.Set("name", envvar); err != nil {
-		return diag.FromErr(err)
-	}
-	if err = d.Set("algo", algo); err != nil {
+	if err = d.Set("config", currConfig); err != nil {
 		return diag.FromErr(err)
 	}
 	if err = d.Set("endpoint", config.Client.BaseURL); err != nil {
@@ -209,7 +208,7 @@ func dataSourceTypeRead(ctx context.Context, d *schema.ResourceData, m interface
 
 	// Set the ID
 	now := time.Now().Format("20060102T150405")
-	tag := envvar + "_" + algo + "_" + now
+	tag := "config" + "_" + now
 	d.SetId(tag)
 
 	return nil
