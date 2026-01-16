@@ -158,24 +158,10 @@ func assertError(t testing.TB, got, want error) {
 	}
 }
 
-func assertGotError(t testing.TB, got error) {
-	t.Helper()
-	if got == nil {
-		t.Errorf("Expected an error but got %q", got)
-	}
-}
-
 func assertStatus(t testing.TB, got, want int) {
 	t.Helper()
 	if got != want {
 		t.Errorf("did not get correct status, got %d, want %d", got, want)
-	}
-}
-
-func assertInt(t *testing.T, got, want int) {
-	t.Helper()
-	if got != want {
-		t.Errorf("did not get correct value, got %d, want %d", got, want)
 	}
 }
 
@@ -185,3 +171,19 @@ func assertStringContains(t *testing.T, full, want string) {
 		t.Errorf("Did not find %q, expected string contains %q", want, full)
 	}
 }
+
+/*
+func assertGotError(t testing.TB, got error) {
+	t.Helper()
+	if got == nil {
+		t.Errorf("Expected an error but got %q", got)
+	}
+}
+
+func assertInt(t *testing.T, got, want int) {
+	t.Helper()
+	if got != want {
+		t.Errorf("did not get correct value, got %d, want %d", got, want)
+	}
+}
+*/
