@@ -29,7 +29,8 @@ func TestAPIClient_ReadType(t *testing.T) {
 	t.Run("Reads API endpoint", func(t *testing.T) {
 		returns := "Metric_int_up: 42"
 		wwwServ := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			fmt.Fprintln(w, returns)
+			_, err := fmt.Fprintln(w, returns)
+			assertError(t, err, nil)
 		}))
 		defer wwwServ.Close()
 
@@ -51,7 +52,8 @@ func TestAPIClient_CRUD(t *testing.T) {
 Set new down value INT_SIZE for 100
 `
 	wwwServ := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintln(w, returns)
+		_, err := fmt.Fprintln(w, returns)
+		assertError(t, err, nil)
 	}))
 	defer wwwServ.Close()
 
@@ -132,11 +134,9 @@ func makeLocalToadLester(t *testing.T) (func(), string) {
 	if err != nil {
 		t.Fatalf("could not get metrics from container: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Fatalf("got status code %d, want %d", resp.StatusCode, http.StatusOK)
-	}
+	assertStatus(t, resp.StatusCode, http.StatusOK)
 
 	end := func() {
 		if err := container.Terminate(ctx); err != nil {
