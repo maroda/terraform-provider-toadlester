@@ -1,3 +1,5 @@
+//go:generate tfplugindocs generate -provider-name toadlester
+
 package main
 
 import (
